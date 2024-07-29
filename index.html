@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Time Tracking App with PDF Report</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0-beta17/dist/css/tabler.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.30.0/tabler-icons.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        .timer-card {
+            transition: background-color 0.3s ease;
+        }
+        body.theme-dark {
+            background-color: #1a2234;
+            color: #fff;
+        }
+        body.theme-dark .card {
+            background-color: #242f46;
+        }
+        body.theme-dark .form-control {
+            background-color: #1a2234;
+            color: #fff;
+            border-color: #374151;
+        }
+        body.theme-dark .btn-outline-secondary {
+            color: #fff;
+            border-color: #4b5563;
+        }
+        body.theme-dark .btn-outline-secondary:hover {
+            background-color: #4b5563;
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <div class="container-xl">
+            <div class="row justify-content-center mt-5">
+                <div class="col-md-8">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Time Tracking App</h3>
+                            <div class="card-actions">
+                                <button id="generateReportBtn" class="btn btn-primary me-2">
+                                    <i class="ti ti-file-text"></i> Generate Report
+                                </button>
+                                <button id="darkModeToggle" class="btn btn-icon" aria-label="Toggle dark mode">
+                                    <i class="ti ti-moon"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label">Task Name</label>
+                                <div class="input-group">
+                                    <input type="text" id="taskInput" class="form-control" placeholder="Enter task name">
+                                    <button id="addTaskBtn" class="btn btn-primary">
+                                        <i class="ti ti-plus"></i> Add Task
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="timerList" class="mt-4"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0-beta17/dist/js/tabler.min.js"></script>
+    <script>
+        const { jsPDF } = window.jspdf;
+        const taskInput = document.getElementById('taskInput');
+        const addTaskBtn = document.getElementById('addTaskBtn');
+        const timerList = document.getElementById('timerList');
+        const darkModeToggle = document.getElementById('darkModeToggle');
+        const generateReportBtn = document.getElementById('generateReportBtn');
+
+        let timers = [];
+
+        function createTimerElement(timer) {
+            const timerElement = document.createElement('div');
+            timerElement.className = 'card mb-3 timer-card';
+            timerElement.setAttribute('data-timer-id', timer.id);
+            timerElement.innerHTML = `
+                <div class="card-body">
+                    <h5 class="card-title">${timer.taskName}</h5>
+                    <p class="card-text">Time: <span class="timer-display">${formatTime(timer.elapsedTime)}</span></p>
+                    <button class="btn btn-sm btn-outline-primary me-2 start-stop-btn">
+                        <i class="ti ti-player-play"></i> Start
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger delete-btn">
+                        <i class="ti ti-trash"></i> Delete
+                    </button>
+                </div>
+            `;
+
+            const startStopBtn = timerElement.querySelector('.start-stop-btn');
+            startStopBtn.addEventListener('click', () => toggleTimer(timer.id));
+
+            const deleteBtn = timerElement.querySelector('.delete-btn');
+            deleteBtn.addEventListener('click', () => deleteTimer(timer.id));
+
+            return timerElement;
+        }
+
+        function addTimer(taskName) {
+            const timer = {
+                id: Date.now(),
+                taskName,
+                startTime: null,
+                elapsedTime: 0,
+                interval: null,
+                isRunning: false
+            };
+
+            timers.push(timer);
+            const timerElement = createTimerElement(timer);
+            timerList.prepend(timerElement);
+        }
+
+        function toggleTimer(timerId) {
+            const timer = timers.find(t => t.id === timerId);
+            if (timer) {
+                if (timer.isRunning) {
+                    stopTimer(timer);
+                } else {
+                    startTimer(timer);
+                }
+                updateTimerButton(timer);
+            }
+        }
+
+        function startTimer(timer) {
+            timer.startTime = Date.now() - timer.elapsedTime;
+            timer.interval = setInterval(() => updateTimerDisplay(timer.id), 1000);
+            timer.isRunning = true;
+        }
+
+        function stopTimer(timer) {
+            clearInterval(timer.interval);
+            timer.elapsedTime = Date.now() - timer.startTime;
+            timer.isRunning = false;
+        }
+
+        function updateTimerButton(timer) {
+            const timerElement = document.querySelector(`[data-timer-id="${timer.id}"]`);
+            if (timerElement) {
+                const startStopBtn = timerElement.querySelector('.start-stop-btn');
+                if (timer.isRunning) {
+                    startStopBtn.innerHTML = '<i class="ti ti-player-stop"></i> Stop';
+                    startStopBtn.classList.replace('btn-outline-primary', 'btn-outline-warning');
+                } else {
+                    startStopBtn.innerHTML = '<i class="ti ti-player-play"></i> Start';
+                    startStopBtn.classList.replace('btn-outline-warning', 'btn-outline-primary');
+                }
+            }
+        }
+
+        function deleteTimer(timerId) {
+            const timerIndex = timers.findIndex(t => t.id === timerId);
+            if (timerIndex !== -1) {
+                const timer = timers[timerIndex];
+                if (timer.isRunning) {
+                    stopTimer(timer);
+                }
+                timers.splice(timerIndex, 1);
+                const timerElement = document.querySelector(`[data-timer-id="${timerId}"]`);
+                if (timerElement) {
+                    timerList.removeChild(timerElement);
+                }
+            }
+        }
+
+        function updateTimerDisplay(timerId) {
+            const timer = timers.find(t => t.id === timerId);
+            if (timer && timer.isRunning) {
+                const timerElement = document.querySelector(`[data-timer-id="${timerId}"]`);
+                if (timerElement) {
+                    const timerDisplay = timerElement.querySelector('.timer-display');
+                    timer.elapsedTime = Date.now() - timer.startTime;
+                    timerDisplay.textContent = formatTime(timer.elapsedTime);
+                }
+            }
+        }
+
+        function formatTime(ms) {
+            const seconds = Math.floor((ms / 1000) % 60);
+            const minutes = Math.floor((ms / (1000 * 60)) % 60);
+            const hours = Math.floor((ms / (1000 * 60 * 60)) % 24);
+            return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+        }
+
+        function pad(num) {
+            return num.toString().padStart(2, '0');
+        }
+
+        function generatePDFReport() {
+            const doc = new jsPDF();
+            doc.setFontSize(18);
+            doc.text("Time Tracking Report", 20, 20);
+            
+            doc.setFontSize(12);
+            let yPosition = 40;
+            
+            timers.forEach((timer, index) => {
+                doc.text(`${index + 1}. ${timer.taskName}`, 20, yPosition);
+                doc.text(`Time: ${formatTime(timer.elapsedTime)}`, 20, yPosition + 10);
+                yPosition += 30;
+                
+                if (yPosition > 280) {
+                    doc.addPage();
+                    yPosition = 20;
+                }
+            });
+            
+            doc.save("time_tracking_report.pdf");
+        }
+
+        addTaskBtn.addEventListener('click', () => {
+            const taskName = taskInput.value.trim();
+            if (taskName) {
+                addTimer(taskName);
+                taskInput.value = '';
+            }
+        });
+
+        darkModeToggle.addEventListener('click', () => {
+            document.body.classList.toggle('theme-dark');
+            const isDarkMode = document.body.classList.contains('theme-dark');
+            darkModeToggle.innerHTML = isDarkMode ? '<i class="ti ti-sun"></i>' : '<i class="ti ti-moon"></i>';
+        });
+
+        taskInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                addTaskBtn.click();
+            }
+        });
+
+        generateReportBtn.addEventListener('click', generatePDFReport);
+    </script>
+</body>
+</html>
