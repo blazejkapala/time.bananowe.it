@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Time Tracking App with PDF Report</title>
+    <title>Time Tracking App with Local Storage</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0-beta17/dist/css/tabler.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.30.0/tabler-icons.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -117,6 +117,7 @@
             timers.push(timer);
             const timerElement = createTimerElement(timer);
             timerList.prepend(timerElement);
+            saveTimersToLocalStorage();
         }
 
         function toggleTimer(timerId) {
@@ -128,12 +129,16 @@
                     startTimer(timer);
                 }
                 updateTimerButton(timer);
+                saveTimersToLocalStorage();
             }
         }
 
         function startTimer(timer) {
             timer.startTime = Date.now() - timer.elapsedTime;
-            timer.interval = setInterval(() => updateTimerDisplay(timer.id), 1000);
+            timer.interval = setInterval(() => {
+                updateTimerDisplay(timer.id);
+                saveTimersToLocalStorage();
+            }, 1000);
             timer.isRunning = true;
         }
 
@@ -169,6 +174,7 @@
                 if (timerElement) {
                     timerList.removeChild(timerElement);
                 }
+                saveTimersToLocalStorage();
             }
         }
 
@@ -217,6 +223,29 @@
             doc.save("time_tracking_report.pdf");
         }
 
+        function saveTimersToLocalStorage() {
+            const timersData = timers.map(timer => ({
+                ...timer,
+                interval: null // Don't save the interval as it's not serializable
+            }));
+            localStorage.setItem('timers', JSON.stringify(timersData));
+        }
+
+        function loadTimersFromLocalStorage() {
+            const storedTimers = localStorage.getItem('timers');
+            if (storedTimers) {
+                timers = JSON.parse(storedTimers);
+                timers.forEach(timer => {
+                    const timerElement = createTimerElement(timer);
+                    timerList.appendChild(timerElement);
+                    updateTimerButton(timer);
+                    if (timer.isRunning) {
+                        startTimer(timer);
+                    }
+                });
+            }
+        }
+
         addTaskBtn.addEventListener('click', () => {
             const taskName = taskInput.value.trim();
             if (taskName) {
@@ -229,6 +258,7 @@
             document.body.classList.toggle('theme-dark');
             const isDarkMode = document.body.classList.contains('theme-dark');
             darkModeToggle.innerHTML = isDarkMode ? '<i class="ti ti-sun"></i>' : '<i class="ti ti-moon"></i>';
+            localStorage.setItem('darkMode', isDarkMode);
         });
 
         taskInput.addEventListener('keypress', (e) => {
@@ -238,6 +268,16 @@
         });
 
         generateReportBtn.addEventListener('click', generatePDFReport);
+
+        // Load timers and apply dark mode on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            loadTimersFromLocalStorage();
+            const isDarkMode = localStorage.getItem('darkMode') === 'true';
+            if (isDarkMode) {
+                document.body.classList.add('theme-dark');
+                darkModeToggle.innerHTML = '<i class="ti ti-sun"></i>';
+            }
+        });
     </script>
 </body>
 </html>
